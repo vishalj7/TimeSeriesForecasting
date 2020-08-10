@@ -96,7 +96,7 @@ class TimeSeriesBaseAlgorithm(ABC):
         Returns
         -------
         fig : plot
-            the line plot for the rolling mean and standard deviation
+            The line plot for the rolling mean and standard deviation
 
         """
         print("Displaying rolling plot...")
