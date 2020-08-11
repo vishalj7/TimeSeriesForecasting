@@ -27,7 +27,6 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         to the number of no_forecast and compares the predictions to the actual 
         values using MAPE on the results.
 
-        
         Parameters
         ----------
         timeseries : DataFrame
@@ -114,7 +113,6 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         """
         Runs decompose on the time series to extract the trend component,
         seasonal component and the residual component. 
-
         
         Parameters
         ----------
@@ -125,13 +123,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         model_type : str
             There are 2 types: 'additive' is useful when the seasonal variation
             is relatively constant over time 'multiplicative' is useful when 
-            the seasonal variation increases over time.
-
-        frequency : tuple
-            A tuple of 4 values representing P, D, Q and M. The 4 values are
-            specifically for the seasonality conponent of the time series.
-            Number of AR parameters (P), differences (D), MA (Q) parameter and
-            single seasonality period (M).
+            the seasonal variation increases over time. 
 
         Returns
         -------
@@ -170,51 +162,53 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return decomposition, fig
 
 
-
     def forecast_vs_actual_plot(self, results, forecast_steps, full_timeseries, 
-                                y_lab, date, confidence_interval=0.05):
+                                y_lab, date, significance_level=0.05):
         """
-        Runs decompose on the time series to extract the trend component,
-        seasonal component and the residual component. 
-
-        
+        Using the forecasted values and the actual values generates a plot 
+        to visulise the Forecasted vs Actuals.
+  
         Parameters
         ----------
-        results : 
+        results : MLEResults
+            Class to hold results from fitting a state space model. The is the 
+            output from calling .fit() on the model.
             
         forecast_steps : str
-            There are 2 types: 'additive' is useful when the seasonal variation
-            is relatively constant over time 'multiplicative' is useful when 
-            the seasonal variation increases over time.
+            The number of observations to forecast for.
 
         full_timeseries : DataFrame
             A dataframe where index is a time based data type e.g datetime or 
-            period(M) and only has one feature which is the target feature.
+            period(M) and only has one feature which is the target feature. This
+            should contain all the observations. 
 
         y_lab : str
             Name of the y-axis 
         
-        date : 
+        date : str
+            A date to start the plotting from. This doesn't have to be from the 
+            start of the timeseries but it should be before the start point for
+            the forecast
 
-        confidence_interval : float
-            The 
+        significance_level : float
+            This significance level is used for the confidence interval. ie., 
+            default value = 0.05 returns a 95% confidence interval. Confidence 
+            interval shows the area where the actual value could be between, 
+            the smaller the significance level, the larger the confidence interval 
+            which returns a larger area. 
 
         Returns
         -------
-        decomposition : DecomposeResult
-            Results class for seasonal decompositions which contains trend 
-            component,cseasonal component and the residual component. 
-
-        fig : plot
-            A plot which shows the original, trend, seasonal and residual
-            components of the time series.
+        m_pred.get_figure() : plot
+            A plot which shows the acutal values, the forecasted values and the
+            confidence interval for the forecasted values.
 
         """
 
         pred_uc = results.get_forecast(steps=forecast_steps)
-        pred_ci = pred_uc.conf_int(alpha=confidence_interval)
+        pred_ci = pred_uc.conf_int(alpha=significance_level)
         
-        plot_data = all_data.loc[(all_data.index >= date)]
+        plot_data = full_timeseries.loc[(full_timeseries.index >= date)]
 
         ax = plot_data.plot(label='Acutals', figsize=(20, 10))
         m_pred = pred_uc.predicted_mean.plot(ax=ax, label='Forecast')
@@ -224,39 +218,173 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
                         pred_ci.iloc[:, 1], color='k', alpha=.25)
         ax.set_xlabel('Date')
         ax.set_ylabel(y_lab)
+        plt.title(("Forecasted vs Actual using {0} confidence interval").format(str(significance_level)))
         plt.legend()
         
-        return m_pred
-
+        return m_pred.get_figure()
 
 
     def grid_search_run(self):
-        print("done grid search")    
-    
+        """
+        Generates a grid search of parameters and then tries every
+        combination saves the AIC score and parameters into a list
 
-
-    def model_build(self):
-        print("done build ")
+        Parameters
+        ----------
+        scores_list : list
+            A list containing a list of order_param, seasonal_order_param, 
+            and results.aic which is the output of calling aic on model.fit().
+            
+        Returns
+        -------
+        scores_list : list
+            Returns the top 5 AIC score from the scores_list.
+            
+        """   
+        aic_scores = []
+        p = d = q = range(0, 2)
+        pdq = list(itertools.product(p, d, q))
+        seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
         
+        # Using the grid search to perform the model build
+        for param in pdq:
+            for param_seasonal in seasonal_pdq:
+                try:
+                    mod = sm.tsa.statespace.sarimax.SARIMAX(df_train,
+                                                    order = param,
+                                                    seasonal_order = param_seasonal,
+                                                    enforce_stationarity = False,
+                                                    enforce_invertibility = False)
+                    results = mod.fit()
+                    aic = [param, param_seasonal, results.aic] 
+                    aic_scores.append(aic)
+                    
+                except Exception as e:
+                    print('Error: '+ str(e))
+                    continue
+                    
+        return aic_scores
+
+
+    def model_build(self, timeseries_train, order_param, seasonal_order_param):
+        """
+        Returns the top 5 AIC scores
+
+        Parameters
+        ----------
+        timeseries_train : DataFrame
+            A dataframe to be used for training the model where index is 
+            a time based data type e.g datetime or period(M) and only has
+            one feature which is the target feature.
+
+        order_param : tuple
+            A tuple of 3 values representing p, d and q. This represents the
+            number of AR parameters (p), differences (d), and MA (q) parameters.
+
+        seasonal_order_param : tuple
+            A tuple of 4 values representing P, D, Q and M. The 4 values are
+            specifically for the seasonality conponent of the time series.
+            Number of AR parameters (P), differences (D), MA (Q) parameter and
+            single seasonality period (M).
+
+        Returns
+        -------
+        results : MLEResults
+            Class to hold results from fitting a state space model. The is the 
+            output from calling .fit() on the model.
+            
+        """
+        mod = sm.tsa.statespace.sarimax.SARIMAX(timeseries_train,
+                                order = order_param,
+                                seasonal_order = seasonal_order_param,
+                                enforce_stationarity = False,
+                                enforce_invertibility = False)
+        results = mod.fit()
+        print("Summary Results Table.") 
+        print(results.summary().tables[1])
+    
+        return results        
 
 
     def model_forecast_result(self):
-        pass 
+        """
+        Returns the top 5 AIC scores
+
+        Parameters
+        ----------
+        scores_list : list
+            A list containing a list of order_param, seasonal_order_param, 
+            and results.aic which is the output of calling aic on model.fit().
+            
+        Returns
+        -------
+        scores_list : list
+            Returns the top 5 AIC score from the scores_list.
+            
+        """ 
     
 
 
     def result_evaluation(self):
-        pass 
+        """
+        Returns the top 5 AIC scores
+
+        Parameters
+        ----------
+        scores_list : list
+            A list containing a list of order_param, seasonal_order_param, 
+            and results.aic which is the output of calling aic on model.fit().
+            
+        Returns
+        -------
+        scores_list : list
+            Returns the top 5 AIC score from the scores_list.
+            
+        """ 
 
 
 
     def run_model_validation(self):
-        pass 
+        """
+        Returns the top 5 AIC scores
+
+        Parameters
+        ----------
+        scores_list : list
+            A list containing a list of order_param, seasonal_order_param, 
+            and results.aic which is the output of calling aic on model.fit().
+            
+        Returns
+        -------
+        scores_list : list
+            Returns the top 5 AIC score from the scores_list.
+            
+        """ 
 
 
 
-    def top_aic_scores(self):
-        pass 
+    def top_aic_scores(self, scores_list):
+        """
+        Returns the top 5 AIC scores
+
+        Parameters
+        ----------
+        scores_list : list
+            A list containing a list of order_param, seasonal_order_param, 
+            and results.aic which is the output of calling aic on model.fit().
+            
+        Returns
+        -------
+        scores_list : list
+            Returns the top 5 AIC score from the scores_list.
+
+        """
+        def top_score(elem):
+            return elem[2]
+    
+        scores_list.sort(key = top_score)
+    
+        return scores_list[0:5] 
 
     
         
