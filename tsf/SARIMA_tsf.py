@@ -98,13 +98,15 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             values = [cv_datestart, cv_dateend, mape_total, mape_freq]
             valuelist.append(values)
 
-        valuelist_df = pd.DataFrame(valuelist, columns=['cross_validate_start_date', 'cross_validate_end_date', 'mape_total', 'mape_'+str(freq)])
+        valuelist_df = pd.DataFrame(valuelist, columns=['cross_validate_start_date', \
+                                'cross_validate_end_date', 'mape_total', 'mape_'+str(freq)])
         
         lst_tot_mape = [item[2] for item in valuelist]
         print("Mean Absolute Percentage Error Total = " + str(round(np.mean(lst_tot_mape),2)))
 
         lst_freq_mape = [item[3] for item in valuelist]
-        print("Mean Absolute Percentage Error {0} on {0} = ".format([list(freq_type_start)[0]]) + str(round(np.mean(lst_freq_mape),2)))
+        print("Mean Absolute Percentage Error {0} on {0} = ".format([list(freq_type_start)[0]]) + \
+                str(round(np.mean(lst_freq_mape),2)))
 
         return valuelist_df
 
@@ -188,7 +190,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         date : str
             A date to start the plotting from. This doesn't have to be from the 
             start of the timeseries but it should be before the start point for
-            the forecast
+            the forecast.
 
         significance_level : float
             This significance level is used for the confidence interval. ie., 
@@ -224,21 +226,23 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return m_pred.get_figure()
 
 
-    def grid_search_run(self):
+    def grid_search_run(self, timeseries_train):
         """
-        Generates a grid search of parameters and then tries every
-        combination saves the AIC score and parameters into a list
+        Generates a grid search of parameters and then builds a 
+        model with every combination of parameters. It then saves
+        the AIC score and parameters into a list.
 
         Parameters
         ----------
-        scores_list : list
-            A list containing a list of order_param, seasonal_order_param, 
-            and results.aic which is the output of calling aic on model.fit().
+        timeseries_train : DataFrame
+            A dataframe to be used for training the model where index is 
+            a time based data type e.g datetime or period(M) and only has
+            one feature which is the target feature.
             
         Returns
         -------
-        scores_list : list
-            Returns the top 5 AIC score from the scores_list.
+        aic_scores : list
+            A list of the order parameters, seasonal parameters and the respective AIC score
             
         """   
         aic_scores = []
@@ -250,7 +254,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         for param in pdq:
             for param_seasonal in seasonal_pdq:
                 try:
-                    mod = sm.tsa.statespace.sarimax.SARIMAX(df_train,
+                    mod = sm.tsa.statespace.sarimax.SARIMAX(timeseries_train,
                                                     order = param,
                                                     seasonal_order = param_seasonal,
                                                     enforce_stationarity = False,
@@ -306,23 +310,71 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return results        
 
 
-    def model_forecast_result(self):
+    def model_forecast_result(self, full_timeseries, order_param, seasonal_order_param, 
+                    forecast_steps, y_lab, date, datetime_col, significance_level=0.05):
         """
-        Returns the top 5 AIC scores
+        Builds the model with all the data and predicts for a specified number of steps 
+        returning the forecasted values.
 
         Parameters
         ----------
-        scores_list : list
-            A list containing a list of order_param, seasonal_order_param, 
-            and results.aic which is the output of calling aic on model.fit().
-            
+        full_timeseries : DataFrame
+            A dataframe to be used for training and testing the model where 
+            index is a time based data type e.g datetime or period(M) and 
+            only has one feature which is the target feature.
+
+        order_param : tuple
+            A tuple of 3 values representing p, d and q. This represents the
+            number of AR parameters (p), differences (d), and MA (q) parameters.
+
+        seasonal_order_param : tuple
+            A tuple of 4 values representing P, D, Q and M. The 4 values are
+            specifically for the seasonality conponent of the time series.
+            Number of AR parameters (P), differences (D), MA (Q) parameter and
+            single seasonality period (M).
+   
+        forecast_steps : str
+            The number of observations to forecast for.
+
+        y_lab : str
+            Name of the y-axis
+
+        date : str
+            A date to start the testing the model from. Any date after and including
+            this will be used as part of the testing the model. 
+
+        datetime_col : str
+            Name of the date time column e.g. Date, Year-Month.
+
+        significance_level : float
+            This significance level is used for the confidence interval. ie., 
+            default value = 0.05 returns a 95% confidence interval. Confidence 
+            interval shows the area where the actual value could be between, 
+            the smaller the significance level, the larger the confidence interval 
+            which returns a larger area. 
+        
         Returns
         -------
-        scores_list : list
+        forecast_actuals : list
             Returns the top 5 AIC score from the scores_list.
             
         """ 
-    
+
+        train_data = full_timeseries.loc[(full_timeseries.index < date)]
+        test_data = full_timeseries.loc[(full_timeseries.index >= date)]
+
+        res = model_build(train_data, order_param, seasonal_order_param)    
+        
+        forecast_r = forecast_actual_plot(res, forecast_steps, full_timeseries, y_lab, date, significance_level)
+        plt.show(forecast_r)
+
+        forecasted_values = res.get_forecast(steps=no_steps).predicted_mean.to_frame().reset_index()
+        forecasted_values.columns = (datetime_col, 'Forecasted')
+        test_data = test_data.reset_index()
+        test_data.columns = (datetime_col, 'Actuals')
+        forecast_actuals = forecasted_values.merge(df_test, on = datetime_col)
+        
+        return forecast_actuals
 
 
     def result_evaluation(self):
