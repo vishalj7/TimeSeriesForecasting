@@ -18,6 +18,26 @@ class TimeSeriesBaseAlgorithm(ABC):
     arguments (no ``*args`` or ``**kwargs``).
     """
     
+    @abstractmethod   
+    def grid_search_run(self):
+        pass
+
+
+    @abstractmethod   
+    def model_build(self):
+        pass
+
+
+    @abstractmethod   
+    def forecast_vs_actual_plot(self):
+        pass
+
+
+    @abstractmethod   
+    def cross_validate(self):
+        pass
+
+
     def data_split(self, data, split_proportion):
         """
         Splits the data into train and test datasets
@@ -147,22 +167,5 @@ class TimeSeriesBaseAlgorithm(ABC):
         return mape
 
 
-    @abstractmethod   
-    def grid_search_run(self):
-        pass
-
-
-    @abstractmethod   
-    def model_build(self):
-        pass
-
-
-    @abstractmethod   
-    def forecast_vs_actual_plot(self):
-        pass
-
-
-    @abstractmethod   
-    def cross_validate(self):
-        pass
+    
 

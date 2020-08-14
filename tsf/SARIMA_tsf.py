@@ -3,7 +3,10 @@ from tsf.TimeSeriesBaseAlgorithm import TimeSeriesBaseAlgorithm
 
 import pandas as pd
 import numpy as np
+import itertools
+
 import matplotlib.pyplot as plt
+
 import statsmodels as sm
 import statsmodels.tsa.api as tsa
 from dateutil.relativedelta import relativedelta
@@ -65,6 +68,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         validation_period = abs(list(freq_type_start.values())[0])
         no_forecasts = list(freq_type_end.values())[0]
         freq = list(freq_type_start.keys())[0]
+
         timeseries = timeseries.sort_index(ascending=True)
 
         valuelist = []
@@ -190,7 +194,8 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         date : str
             A date to start the plotting from. This doesn't have to be from the 
             start of the timeseries but it should be before the start point for
-            the forecast.
+            the forecast. This should be in the same format as the datetime 
+            column.
 
         significance_level : float
             This significance level is used for the confidence interval. ie., 
@@ -245,6 +250,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             A list of the order parameters, seasonal parameters and the respective AIC score
             
         """   
+
         aic_scores = []
         p = d = q = range(0, 2)
         pdq = list(itertools.product(p, d, q))
@@ -270,9 +276,65 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return aic_scores
 
 
+    def grid_search_CV(self, timeseries, freq_type_start, freq_type_end):
+        """
+        Generates a grid search of parameters and then builds a 
+        model with every combination of parameters. It then saves
+        the AIC score and parameters into a list.
+
+        Parameters
+        ----------
+        timeseries : DataFrame
+            A dataframe where index is a time based data type e.g datetime or 
+            period(M) and only has one feature which is the target feature.
+            
+        freq_type_start : dict 
+            A dictionary where the key is the frequency of observations and 
+            value is validation_period - the number of cross validation iterations 
+            to use for testing the model's stabilty overtime. e.g. {'months' : -12} 
+
+        freq_type_end : dict 
+            A dictionary where the key is the frequency of observations and 
+            value is no_forecasts - the number of observations to forecast for
+            e.g. {'months' : 6}
+            
+        Returns
+        -------
+        aic_scores : list
+            A list of the order parameters, seasonal parameters and the respective AIC score
+            
+        """   
+
+        aic_scores = []
+        p = d = q = range(0, 2)
+        pdq = list(itertools.product(p, d, q))
+        seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
+        
+        freq = list(freq_type_start.keys())[0]
+        grid_cv_df = pd.DataFrame(columns=['cross_validate_start_date', 
+                            'cross_validate_end_date', 'mape_total', 'mape_'+str(freq), 
+                            'order_param', 'seasonal_param'])
+
+        # Using the grid search to perform the model build
+        for param in pdq:
+            for param_seasonal in seasonal_pdq:
+                print("Order: {0}, Seasonal_Order: {1}".format(param, param_seasonal))            
+                cv_res = self.cross_validate(timeseries, param, param_seasonal, freq_type_start, freq_type_end)
+
+                cv_res['order_param'] = str(param)
+                cv_res['seasonal_param'] = str(param_seasonal)
+                print(cv_res)
+
+                grid_cv_df = grid_cv_df.append(cv_res, ignore_index=True)
+
+
+        return grid_cv_df
+
+
+
     def model_build(self, timeseries_train, order_param, seasonal_order_param):
         """
-        Returns the top 5 AIC scores
+        Builds the model and returns summary statistics.
 
         Parameters
         ----------
@@ -298,6 +360,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             output from calling .fit() on the model.
             
         """
+
         mod = sm.tsa.statespace.sarimax.SARIMAX(timeseries_train,
                                 order = order_param,
                                 seasonal_order = seasonal_order_param,
@@ -311,10 +374,10 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
 
     def model_forecast_result(self, full_timeseries, order_param, seasonal_order_param, 
-                    forecast_steps, y_lab, date, datetime_col, significance_level=0.05):
+                    forecast_steps, y_lab, test_date, plot_date, datetime_col, significance_level=0.05):
         """
-        Builds the model with all the data and predicts for a specified number of steps 
-        returning the forecasted values.
+        Builds the model with all the data and predicts for a specified number 
+        of steps returning the forecasted values.
 
         Parameters
         ----------
@@ -339,9 +402,16 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         y_lab : str
             Name of the y-axis
 
-        date : str
-            A date to start the testing the model from. Any date after and including
-            this will be used as part of the testing the model. 
+        test_date : str
+            A date to start the testing the model from. Any date after 
+            and including this will be used as part of the testing the 
+            model. This should be in the same format as the datetime 
+            column.
+
+        plot_date : str
+            A date to plot the results from. This date should be prior to 
+            the test_date. This should be in the same format as the datetime 
+            column.
 
         datetime_col : str
             Name of the date time column e.g. Date, Year-Month.
@@ -355,64 +425,95 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         
         Returns
         -------
-        forecast_actuals : list
-            Returns the top 5 AIC score from the scores_list.
+        forecast_actuals : DataFrame
+            A dataframe containing 3 columns the datetime column, the forecasted 
+            observation values and the actual observation values.
             
         """ 
 
-        train_data = full_timeseries.loc[(full_timeseries.index < date)]
-        test_data = full_timeseries.loc[(full_timeseries.index >= date)]
+        train_data = full_timeseries.loc[(full_timeseries.index < test_date)]
+        test_data = full_timeseries.loc[(full_timeseries.index >= test_date)]
 
-        res = model_build(train_data, order_param, seasonal_order_param)    
+        res = self.model_build(train_data, order_param, seasonal_order_param)    
         
-        forecast_r = forecast_actual_plot(res, forecast_steps, full_timeseries, y_lab, date, significance_level)
+        forecast_r = self.forecast_vs_actual_plot(res, forecast_steps, full_timeseries, y_lab, \
+                            plot_date, significance_level)
         plt.show(forecast_r)
 
-        forecasted_values = res.get_forecast(steps=no_steps).predicted_mean.to_frame().reset_index()
+        forecasted_values = res.get_forecast(steps=forecast_steps).predicted_mean.to_frame().reset_index()
         forecasted_values.columns = (datetime_col, 'Forecasted')
         test_data = test_data.reset_index()
         test_data.columns = (datetime_col, 'Actuals')
-        forecast_actuals = forecasted_values.merge(df_test, on = datetime_col)
+        forecast_actuals = forecasted_values.merge(test_data, on = datetime_col)
         
         return forecast_actuals
 
 
-    def result_evaluation(self):
+    def result_evaluation(self, cr_result):
         """
-        Returns the top 5 AIC scores
+        Plots the diagnostics for each set of hyperparameters
 
         Parameters
         ----------
-        scores_list : list
-            A list containing a list of order_param, seasonal_order_param, 
-            and results.aic which is the output of calling aic on model.fit().
-            
-        Returns
-        -------
-        scores_list : list
-            Returns the top 5 AIC score from the scores_list.
+        cr_result : list
+            A list containing result of performing cross validation on each 
+            of the top 5 grid score searches. 
             
         """ 
+        # for x in cr_result:
+        #     print("Hyperparameters: Order{0}, Seasonal_Order{1}".format(x[0][0], x[0][1]))
+        #     r = x[1]
+        #     r.plot_diagnostics(figsize=(20, 8))
+        #     plt.show()
+        
+        # print("")
 
 
 
-    def run_model_validation(self):
+    def run_model_validation(self, grid_search_scores, timeseries_train, freq_type_start, freq_type_end):
         """
-        Returns the top 5 AIC scores
+        Runs the model build and cross validation functions for the top 5 aic scores
 
         Parameters
         ----------
-        scores_list : list
+        grid_search_scores : list
             A list containing a list of order_param, seasonal_order_param, 
             and results.aic which is the output of calling aic on model.fit().
+
+        timeseries_train : DataFrame
+            A dataframe to be used for training the model where index is 
+            a time based data type e.g datetime or period(M) and only has
+            one feature which is the target feature.
+
+        freq_type_start : dict 
+            A dictionary where the key is the frequency of observations and 
+            value is validation_period - the number of cross validation iterations 
+            to use for testing the model's stabilty overtime. e.g. {'months' : -12} 
+
+        freq_type_end : dict 
+            A dictionary where the key is the frequency of observations and 
+            value is no_forecasts - the number of observations to forecast for
+            e.g. {'months' : 6} 
             
         Returns
         -------
-        scores_list : list
-            Returns the top 5 AIC score from the scores_list.
+        cr_result : list
+            A list containing result of performing cross validation on each 
+            of the top 5 grid score searches. 
             
         """ 
 
+        hyperparams = self.top_aic_scores(grid_search_scores) 
+
+        cr_result = []
+        for order_x, seasonal_order_y, z in hyperparams:
+            print("Order: {0}, Seasonal_Order: {1}".format(order_x, seasonal_order_y))            
+            cr_res = self.cross_validate(timeseries_train, order_x, seasonal_order_y, freq_type_start, freq_type_end)
+            cr_result.append([(order_x, seasonal_order_y) ,cr_res])
+            print("")
+            print("")
+
+        return cr_result
 
 
     def top_aic_scores(self, scores_list):
