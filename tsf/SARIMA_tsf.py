@@ -221,7 +221,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
                         pred_ci.iloc[:, 1], color='k', alpha=.25)
         ax.set_xlabel('Date')
         ax.set_ylabel(y_lab)
-        plt.title(("Forecasted vs Actual using {0} confidence interval").format(str(significance_level)))
+        plt.title(("Forecasted Values using {0} confidence interval").format(str(significance_level)))
         plt.legend()
         
         return m_pred.get_figure()
@@ -241,10 +241,14 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             one feature which is the target feature.
             
         order_range : range
-            A
+            A range of values to assign for p, d and q. This represents the
+            number of AR parameters (p), differences (d), and MA (q) parameters.
 
         seasonal_order_list : list
-            A
+            A list of values to assign for M. This represents a single 
+            seasonality period (M). Note it will use order_range for the
+            values for the number of AR parameters (P), differences (D)
+            and MA (Q) parameter.
 
         Returns
         -------
@@ -287,7 +291,17 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         timeseries : DataFrame
             A dataframe where index is a time based data type e.g datetime or 
             period(M) and only has one feature which is the target feature.
-            
+
+        order_range : range
+            A range of values to assign for p, d and q. This represents the
+            number of AR parameters (p), differences (d), and MA (q) parameters.
+
+        seasonal_order_list : list
+            A list of values to assign for M. This represents a single 
+            seasonality period (M). Note it will use order_range for the
+            values for the number of AR parameters (P), differences (D)
+            and MA (Q) parameter.    
+
         freq_type_start : dict 
             A dictionary where the key is the frequency of observations and 
             value is validation_period - the number of cross validation iterations 
@@ -365,11 +379,12 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return results        
 
 
-    def model_forecast_result(self, full_timeseries, order_param, seasonal_order_param, 
+    def plot_actuals_vs_forecast(self, full_timeseries, order_param, seasonal_order_param, 
                     forecast_steps, y_lab, test_date, plot_date, datetime_col, significance_level=0.05):
         """
-        Builds the model with all the data and predicts for a specified number 
-        of steps returning the forecasted values.
+        Splits the timeseries into train and test based on the test date. It
+        then builds the model with the train data and predicts for a specified 
+        number of steps returning the forecasted values. Then 
 
         Parameters
         ----------
@@ -491,10 +506,9 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         -------
         run_model_df : DataFrame
             A Dataframe containing the results of running cross_validation, the 
-            dataframe contains the following columns 'cross_validate_start_date', 
-            'cross_validate_end_date', 'mape_total', 'mape_freq', 'order_param'
-            and 'seasonal_param'. The word 'freq' is replaced with the actual 
-            frequency of the data. 
+            dataframe contains the following columns 'order_param', 
+            'seasonal_order_param', 'mape_total', 'mape_freq'. The word 'freq' is 
+            replaced with the actual frequency of the data. 
             
         """ 
 
