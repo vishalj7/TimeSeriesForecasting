@@ -61,7 +61,8 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         valuelist_df : DataFrame
             A dataframe containing the results of the cross validation. 
             There are 4 columns 'cross_validate_start_date', 'cross_validate_end_date',
-            'mape_total', 'mape_freq'
+            'mape_total', 'mape_freq'. The word 'freq' is replaced with the actual
+            frequency of the data.
 
         """
 
@@ -84,14 +85,8 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             cv_df= timeseries.loc[timeseries.index < cv_datestart]
             actual12 = timeseries.loc[(timeseries.index >= cv_datestart) & (timeseries.index < cv_dateend)]
 
-            mod_cv = sm.tsa.statespace.sarimax.SARIMAX(cv_df,
-                                        order=order_param,
-                                        seasonal_order=seasonal_order_param,
-                                        enforce_stationarity=False,
-                                        enforce_invertibility=False)
-
-            results_cv = mod_cv.fit()
-            pred_uc_cv = results_cv.get_forecast(steps=no_forecasts)
+            model_cv = self.model_build(cv_df, order_param, seasonal_order_param)
+            pred_uc_cv = model_cv.get_forecast(steps=no_forecasts)
 
             pred12 = pred_uc_cv.predicted_mean
             actual12 = actual12[actual12.columns[0]]
@@ -300,12 +295,15 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             
         Returns
         -------
-        aic_scores : list
-            A list of the order parameters, seasonal parameters and the respective AIC score
+        grid_cv_df : DataFrame
+            A Dataframe containing the results of running cross_validation, the 
+            dataframe contains the following columns 'cross_validate_start_date', 
+            'cross_validate_end_date', 'mape_total', 'mape_freq', 'order_param'
+            and 'seasonal_param'. The word 'freq' is replaced with the actual 
+            frequency of the data.
             
         """   
 
-        aic_scores = []
         p = d = q = range(0, 2)
         pdq = list(itertools.product(p, d, q))
         seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
@@ -323,13 +321,10 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
                 cv_res['order_param'] = str(param)
                 cv_res['seasonal_param'] = str(param_seasonal)
-                print(cv_res)
 
                 grid_cv_df = grid_cv_df.append(cv_res, ignore_index=True)
-
-
+                print("")
         return grid_cv_df
-
 
 
     def model_build(self, timeseries_train, order_param, seasonal_order_param):
@@ -497,23 +492,34 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             
         Returns
         -------
-        cr_result : list
-            A list containing result of performing cross validation on each 
-            of the top 5 grid score searches. 
+        run_model_df : DataFrame
+            A Dataframe containing the results of running cross_validation, the 
+            dataframe contains the following columns 'cross_validate_start_date', 
+            'cross_validate_end_date', 'mape_total', 'mape_freq', 'order_param'
+            and 'seasonal_param'. The word 'freq' is replaced with the actual 
+            frequency of the data. 
             
         """ 
 
         hyperparams = self.top_aic_scores(grid_search_scores) 
 
-        cr_result = []
+        freq = list(freq_type_start.keys())[0]
+        run_model_df = pd.DataFrame(columns=['cross_validate_start_date', 
+                            'cross_validate_end_date', 'mape_total', 'mape_'+str(freq), 
+                            'order_param', 'seasonal_param'])
+
+        # cr_result = []
         for order_x, seasonal_order_y, z in hyperparams:
             print("Order: {0}, Seasonal_Order: {1}".format(order_x, seasonal_order_y))            
-            cr_res = self.cross_validate(timeseries_train, order_x, seasonal_order_y, freq_type_start, freq_type_end)
-            cr_result.append([(order_x, seasonal_order_y) ,cr_res])
+            cv_res = self.cross_validate(timeseries_train, order_x, seasonal_order_y, freq_type_start, freq_type_end)
             print("")
             print("")
+            cv_res['order_param'] = str(order_x)
+            cv_res['seasonal_param'] = str(seasonal_order_y)
+            
+            run_model_df = run_model_df.append(cv_res, ignore_index=True)
 
-        return cr_result
+        return run_model_df
 
 
     def top_aic_scores(self, scores_list):
