@@ -58,9 +58,9 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         Returns
         -------
-        valuelist_df : DataFrame
+        cv_mape_res : DataFrame
             A dataframe containing the results of the cross validation. 
-            There are 4 columns 'cross_validate_start_date', 'cross_validate_end_date',
+            There are 4 columns 'order_param', 'seasonal_order_param', 
             'mape_total', 'mape_freq'. The word 'freq' is replaced with the actual
             frequency of the data.
 
@@ -72,7 +72,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         timeseries = timeseries.sort_index(ascending=True)
 
-        valuelist = []
+        mape = []
         timeseries_temp = timeseries.tail(validation_period)
 
         datelist = timeseries_temp.index.tolist()
@@ -94,20 +94,21 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             mape_total = super().mean_absolute_percentage_error(sum(actual12),sum(pred12))
             mape_freq = super().mean_absolute_percentage_error(actual12,pred12)
 
-            values = [cv_datestart, cv_dateend, mape_total, mape_freq]
-            valuelist.append(values)
+            mape_res = [cv_datestart, cv_dateend, mape_total, mape_freq]
+            mape.append(mape_res)
 
-        valuelist_df = pd.DataFrame(valuelist, columns=['cross_validate_start_date', \
-                                'cross_validate_end_date', 'mape_total', 'mape_'+str(freq)])
+        cv_mape_res = pd.DataFrame(columns=['order_param', \
+                                'seasonal_order_param', 'mape_total', 'mape_'+str(freq)])
         
-        lst_tot_mape = [item[2] for item in valuelist]
-        print("Mean Absolute Percentage Error Total = " + str(round(np.mean(lst_tot_mape),2)))
+        lst_tot_mape = str(round(np.mean([item[2] for item in mape]),2))
+        lst_freq_mape = str(round(np.mean([item[3] for item in mape]),2))
 
-        lst_freq_mape = [item[3] for item in valuelist]
-        print("Mean Absolute Percentage Error {0} on {0} = ".format([list(freq_type_start)[0]]) + \
-                str(round(np.mean(lst_freq_mape),2)))
+        mape_row = pd.Series(data=[order_param, seasonal_order_param, lst_tot_mape, lst_freq_mape], \
+            index=['order_param', 'seasonal_order_param', 'mape_total', 'mape_'+str(freq)])
 
-        return valuelist_df
+        cv_mape_res = cv_mape_res.append(mape_row, ignore_index=True)
+
+        return cv_mape_res
 
     
     def decompose(self, timeseries, model_type):
@@ -163,7 +164,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return decomposition, fig
 
 
-    def forecast_vs_actual_plot(self, results, forecast_steps, full_timeseries, 
+    def plot_forecasts(self, results, forecast_steps, full_timeseries, 
                                 y_lab, date, significance_level=0.05):
         """
         Using the forecasted values and the actual values generates a plot 
@@ -226,7 +227,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return m_pred.get_figure()
 
 
-    def grid_search_run(self, timeseries_train):
+    def grid_search_run(self, timeseries_train, order_range, seasonal_order_list):
         """
         Generates a grid search of parameters and then builds a 
         model with every combination of parameters. It then saves
@@ -239,6 +240,12 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             a time based data type e.g datetime or period(M) and only has
             one feature which is the target feature.
             
+        order_range : range
+            A
+
+        seasonal_order_list : list
+            A
+
         Returns
         -------
         aic_scores : list
@@ -247,20 +254,17 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         """   
 
         aic_scores = []
-        p = d = q = range(0, 2)
+        p = d = q = order_range
+        M = seasonal_order_list
         pdq = list(itertools.product(p, d, q))
-        seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
+        seasonal_pdq = [(x[0], x[1], x[2], x[3]) for x in list(itertools.product(p, d, q, M))]
         
         # Using the grid search to perform the model build
         for param in pdq:
             for param_seasonal in seasonal_pdq:
                 try:
-                    mod = sm.tsa.statespace.sarimax.SARIMAX(timeseries_train,
-                                                    order = param,
-                                                    seasonal_order = param_seasonal,
-                                                    enforce_stationarity = False,
-                                                    enforce_invertibility = False)
-                    results = mod.fit()
+                    results = self.model_build(timeseries_train, param, param_seasonal)
+
                     aic = [param, param_seasonal, results.aic] 
                     aic_scores.append(aic)
                     
@@ -271,7 +275,8 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return aic_scores
 
 
-    def grid_search_CV(self, timeseries, freq_type_start, freq_type_end):
+    def grid_search_CV(self, timeseries, order_range, seasonal_order_list,
+                                freq_type_start, freq_type_end):
         """
         Generates a grid search of parameters and then builds a 
         model with every combination of parameters. It then saves
@@ -296,34 +301,28 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         Returns
         -------
         grid_cv_df : DataFrame
-            A Dataframe containing the results of running cross_validation, the 
-            dataframe contains the following columns 'cross_validate_start_date', 
-            'cross_validate_end_date', 'mape_total', 'mape_freq', 'order_param'
-            and 'seasonal_param'. The word 'freq' is replaced with the actual 
+            A dataframe containing the results of the cross validation. 
+            There are 4 columns 'order_param', 'seasonal_order_param', 
+            'mape_total', 'mape_freq'. The word 'freq' is replaced with the actual
             frequency of the data.
             
         """   
 
-        p = d = q = range(0, 2)
+        p = d = q = order_range
+        M = seasonal_order_list
         pdq = list(itertools.product(p, d, q))
-        seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
+        seasonal_pdq = [(x[0], x[1], x[2], x[3]) for x in list(itertools.product(p, d, q, M))]
         
         freq = list(freq_type_start.keys())[0]
-        grid_cv_df = pd.DataFrame(columns=['cross_validate_start_date', 
-                            'cross_validate_end_date', 'mape_total', 'mape_'+str(freq), 
-                            'order_param', 'seasonal_param'])
+        grid_cv_df = pd.DataFrame(columns=['order_param', 'seasonal_order_param',\
+                                'mape_total', 'mape_'+str(freq)])
 
         # Using the grid search to perform the model build
         for param in pdq:
             for param_seasonal in seasonal_pdq:
-                print("Order: {0}, Seasonal_Order: {1}".format(param, param_seasonal))            
                 cv_res = self.cross_validate(timeseries, param, param_seasonal, freq_type_start, freq_type_end)
-
-                cv_res['order_param'] = str(param)
-                cv_res['seasonal_param'] = str(param_seasonal)
-
                 grid_cv_df = grid_cv_df.append(cv_res, ignore_index=True)
-                print("")
+
         return grid_cv_df
 
 
@@ -362,8 +361,6 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
                                 enforce_stationarity = False,
                                 enforce_invertibility = False)
         results = mod.fit()
-        print("Summary Results Table.") 
-        print(results.summary().tables[1])
     
         return results        
 
@@ -431,7 +428,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         res = self.model_build(train_data, order_param, seasonal_order_param)    
         
-        forecast_r = self.forecast_vs_actual_plot(res, forecast_steps, full_timeseries, y_lab, \
+        forecast_r = self.plot_forecasts(res, forecast_steps, full_timeseries, y_lab, \
                             plot_date, significance_level)
         plt.show(forecast_r)
 
@@ -504,19 +501,12 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         hyperparams = self.top_aic_scores(grid_search_scores) 
 
         freq = list(freq_type_start.keys())[0]
-        run_model_df = pd.DataFrame(columns=['cross_validate_start_date', 
-                            'cross_validate_end_date', 'mape_total', 'mape_'+str(freq), 
-                            'order_param', 'seasonal_param'])
+        run_model_df = pd.DataFrame(columns=['order_param', 'seasonal_order_param', 'mape_total', \
+                                'mape_'+str(freq)])
 
-        # cr_result = []
         for order_x, seasonal_order_y, z in hyperparams:
-            print("Order: {0}, Seasonal_Order: {1}".format(order_x, seasonal_order_y))            
             cv_res = self.cross_validate(timeseries_train, order_x, seasonal_order_y, freq_type_start, freq_type_end)
-            print("")
-            print("")
-            cv_res['order_param'] = str(order_x)
-            cv_res['seasonal_param'] = str(seasonal_order_y)
-            
+                    
             run_model_df = run_model_df.append(cv_res, ignore_index=True)
 
         return run_model_df
