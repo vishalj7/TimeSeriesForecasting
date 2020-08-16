@@ -258,7 +258,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
                         pred_ci.iloc[:, 1], color='k', alpha=.25)
         ax.set_xlabel('Date')
         ax.set_ylabel(y_lab)
-        plt.title(("Forecasted Values using {0}\% confidence interval").format(str(100-(significance_level*100))))
+        plt.title(("Forecasted Values using {0}% confidence interval").format(str(int(100-(significance_level*100)))))
         plt.legend()
         
         return m_pred.get_figure()
@@ -289,7 +289,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         Returns
         -------
-        aic_scores : list
+        aic_scores : c
             A list of the order parameters, seasonal parameters and the respective AIC score
             
         """   
