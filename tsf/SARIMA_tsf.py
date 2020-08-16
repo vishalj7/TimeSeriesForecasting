@@ -1,4 +1,5 @@
 
+# Libraries
 from tsf.TimeSeriesBaseAlgorithm import TimeSeriesBaseAlgorithm
 
 import pandas as pd
@@ -14,12 +15,25 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 
 
 class SARIMA_tsf(TimeSeriesBaseAlgorithm):
+    """
+    This class uses the SARIMA algorithm for time series forecasting and
+    it contains methods which allow you to check for stationarity, create 
+    models, perform a grid search on models, cross validate models, creates
+    plot for forecasts and more. 
+    
+    Notes
+    -----
+    This class inherits from TimeSeriesBaseAlgorithm base class and it 
+    provides implementation for the base class's abstract methods. This
+    subclass also has specific methods for SARIMA time series algorithm.
+
+    """
     
     def __init__(self):
         pass
 
 
-    def cross_validate(self, timeseries, order_param, seasonal_order_param, 
+    def cross_validate(self, time_series, order_param, seasonal_order_param, 
                         freq_type_start, freq_type_end):
         """
         Runs cross validation for a specified duration (validation_period) 
@@ -32,7 +46,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         Parameters
         ----------
-        timeseries : DataFrame
+        time_series : DataFrame
             A dataframe where index is a time based data type e.g datetime or 
             period(M) and only has one feature which is the target feature.
             
@@ -49,7 +63,8 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         freq_type_start : dict 
             A dictionary where the key is the frequency of observations and 
             value is validation_period - the number of cross validation iterations 
-            to use for testing the model's stabilty overtime. e.g. {'months' : -12} 
+            to use for testing the model's stabilty overtime which should be a 
+            negative value. e.g. {'months' : -12} 
 
         freq_type_end : dict 
             A dictionary where the key is the frequency of observations and 
@@ -66,43 +81,58 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         """
 
+        # Extracts the validation_period, no_forecasts and frequency from the input 
+        # dictionaries
         validation_period = abs(list(freq_type_start.values())[0])
         no_forecasts = list(freq_type_end.values())[0]
         freq = list(freq_type_start.keys())[0]
+        
+        # Sorts the input time series
+        time_series = time_series.sort_index(ascending=True)
 
-        timeseries = timeseries.sort_index(ascending=True)
-
+        # Gets the newest observations and creates a list
         mape = []
-        timeseries_temp = timeseries.tail(validation_period)
+        time_series_temp = time_series.tail(validation_period)
+        datelist = time_series_temp.index.tolist()
 
-        datelist = timeseries_temp.index.tolist()
-
+        # Performs the cross validation for each date in the validation period
         for date in datelist:
+            # Sets the start and end date for the test data
             cv_date = pd.to_datetime(date)
             cv_datestart = cv_date + relativedelta(**freq_type_start)
             cv_dateend = cv_datestart + relativedelta(**freq_type_end)
 
-            cv_df= timeseries.loc[timeseries.index < cv_datestart]
-            actual12 = timeseries.loc[(timeseries.index >= cv_datestart) & (timeseries.index < cv_dateend)]
+            # Everything prior to the start date is the training data
+            cv_df= time_series.loc[time_series.index < cv_datestart]
+            # Everything between the start and end date is the test data
+            actual = time_series.loc[(time_series.index >= cv_datestart) & (time_series.index < cv_dateend)]
 
+            # Builds the model and makes a forecast equal to the no_forecasts
             model_cv = self.model_build(cv_df, order_param, seasonal_order_param)
-            pred_uc_cv = model_cv.get_forecast(steps=no_forecasts)
+            pred_forecast = model_cv.get_forecast(steps=no_forecasts)
 
-            pred12 = pred_uc_cv.predicted_mean
-            actual12 = actual12[actual12.columns[0]]
+            # Gets the predicted values and actual values
+            pred = pred_forecast.predicted_mean
+            actual = actual[actual.columns[0]]
 
-            mape_total = super().mean_absolute_percentage_error(sum(actual12),sum(pred12))
-            mape_freq = super().mean_absolute_percentage_error(actual12,pred12)
+            # Calculates the MAPE total (sum of the actuals vs sum of predictions) 
+            # and MAPE freq (the MAPE for individual observations)
+            mape_total = super().mean_absolute_percentage_error(sum(actual),sum(pred))
+            mape_freq = super().mean_absolute_percentage_error(actual,pred)
 
+            # Adds the values to a list
             mape_res = [cv_datestart, cv_dateend, mape_total, mape_freq]
             mape.append(mape_res)
 
+        # Creates an empty dataframe
         cv_mape_res = pd.DataFrame(columns=['order_param', \
                                 'seasonal_order_param', 'mape_total', 'mape_'+str(freq)])
         
+        # Calculates the MAPE total and MAPE freq for the entire validation period
         lst_tot_mape = str(round(np.mean([item[2] for item in mape]),2))
         lst_freq_mape = str(round(np.mean([item[3] for item in mape]),2))
 
+        # Creates a series and adds the data as a row to the 'cv_mape_res' dataframe
         mape_row = pd.Series(data=[order_param, seasonal_order_param, lst_tot_mape, lst_freq_mape], \
             index=['order_param', 'seasonal_order_param', 'mape_total', 'mape_'+str(freq)])
 
@@ -111,14 +141,14 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return cv_mape_res
 
     
-    def decompose(self, timeseries, model_type):
+    def decompose(self, time_series, model_type):
         """
         Runs decompose on the time series to extract the trend component,
         seasonal component and the residual component. 
         
         Parameters
         ----------
-        timeseries : DataFrame
+        time_series : DataFrame
             A dataframe where index is a time based data type e.g datetime or 
             period(M) and only has one feature which is the target feature.
             
@@ -138,16 +168,19 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             components of the time series.
 
         """
-
+        # Creates an empty plot and performs seasonal decomposion of the 
+        # input time series
         fig, ax = plt.subplots(figsize=(20, 10))
-        decomposition = seasonal_decompose(timeseries, model = model_type)
+        decomposition = seasonal_decompose(time_series, model = model_type)
 
+        # Extracts the trend, seasonal, residual components of the
         trend = decomposition.trend
         seasonal = decomposition.seasonal
         residual = decomposition.resid
 
+        # Creates individual subplots and adds them to the big plot
         plt.subplot(411)
-        plt.plot(timeseries, label='Original')
+        plt.plot(time_series, label='Original')
         plt.legend(loc='best')
         plt.subplot(412)
         plt.plot(trend, label='Trend')
@@ -164,7 +197,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return decomposition, fig
 
 
-    def plot_forecasts(self, results, forecast_steps, full_timeseries, 
+    def plot_forecasts(self, results, forecast_steps, full_time_series, 
                                 y_lab, date, significance_level=0.05):
         """
         Using the forecasted values and the actual values generates a plot 
@@ -179,7 +212,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         forecast_steps : str
             The number of observations to forecast for.
 
-        full_timeseries : DataFrame
+        full_time_series : DataFrame
             A dataframe where index is a time based data type e.g datetime or 
             period(M) and only has one feature which is the target feature. This
             should contain all the observations. 
@@ -189,7 +222,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         
         date : str
             A date to start the plotting from. This doesn't have to be from the 
-            start of the timeseries but it should be before the start point for
+            start of the time series but it should be before the start point for
             the forecast. This should be in the same format as the datetime 
             column.
 
@@ -203,19 +236,23 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         Returns
         -------
         m_pred.get_figure() : plot
-            A plot which shows the acutal values, the forecasted values and the
+            A plot which shows the actual values, the forecasted values and the
             confidence interval for the forecasted values.
 
         """
 
-        pred_uc = results.get_forecast(steps=forecast_steps)
-        pred_ci = pred_uc.conf_int(alpha=significance_level)
+        # Gets a set of forecasts and the associated confidence intervals
+        pred_forecast = results.get_forecast(steps=forecast_steps)
+        pred_ci = pred_forecast.conf_int(alpha=significance_level)
         
-        plot_data = full_timeseries.loc[(full_timeseries.index >= date)]
+        # Selects the desired obervations to plot
+        plot_data = full_time_series.loc[(full_time_series.index >= date)]
 
-        ax = plot_data.plot(label='Acutals', figsize=(20, 10))
-        m_pred = pred_uc.predicted_mean.plot(ax=ax, label='Forecast')
+        # Plots the actual and forecasted values
+        ax = plot_data.plot(label='Actuals', figsize=(20, 10))
+        m_pred = pred_forecast.predicted_mean.plot(ax=ax, label='Forecast')
 
+        # Adds the confidence intervals and shades them grey
         ax.fill_between(pred_ci.index,
                         pred_ci.iloc[:, 0],
                         pred_ci.iloc[:, 1], color='k', alpha=.25)
@@ -227,7 +264,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return m_pred.get_figure()
 
 
-    def grid_search_run(self, timeseries_train, order_range, seasonal_order_list):
+    def grid_search_run(self, time_series_train, order_range, seasonal_order_list):
         """
         Generates a grid search of parameters and then builds a 
         model with every combination of parameters. It then saves
@@ -235,7 +272,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         Parameters
         ----------
-        timeseries_train : DataFrame
+        time_series_train : DataFrame
             A dataframe to be used for training the model where index is 
             a time based data type e.g datetime or period(M) and only has
             one feature which is the target feature.
@@ -257,21 +294,25 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             
         """   
 
+        # Creates a combination of all the different values for order param
+        # and seasonal order param (the grid)
         aic_scores = []
         p = d = q = order_range
         M = seasonal_order_list
         pdq = list(itertools.product(p, d, q))
         seasonal_pdq = [(x[0], x[1], x[2], x[3]) for x in list(itertools.product(p, d, q, M))]
         
-        # Using the grid search to perform the model build
+        # Using the grid, it builds a model for each unique combination 
+        # to search for the model which the best performance using AIC metric
         for param in pdq:
             for param_seasonal in seasonal_pdq:
                 try:
-                    results = self.model_build(timeseries_train, param, param_seasonal)
+                    results = self.model_build(time_series_train, param, param_seasonal)
 
                     aic = [param, param_seasonal, results.aic] 
                     aic_scores.append(aic)
                     
+                # Captures any errors
                 except Exception as e:
                     print('Error: '+ str(e))
                     continue
@@ -279,7 +320,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return aic_scores
 
 
-    def grid_search_CV(self, timeseries, order_range, seasonal_order_list,
+    def grid_search_CV(self, time_series, order_range, seasonal_order_list,
                                 freq_type_start, freq_type_end):
         """
         Generates a grid search of parameters and then builds a 
@@ -288,7 +329,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         Parameters
         ----------
-        timeseries : DataFrame
+        time_series : DataFrame
             A dataframe where index is a time based data type e.g datetime or 
             period(M) and only has one feature which is the target feature.
 
@@ -322,31 +363,35 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             
         """   
 
+        # Creates a combination of all the different values for order param
+        # and seasonal order param (the grid)
         p = d = q = order_range
         M = seasonal_order_list
         pdq = list(itertools.product(p, d, q))
         seasonal_pdq = [(x[0], x[1], x[2], x[3]) for x in list(itertools.product(p, d, q, M))]
         
+        # Gets the frequency and creates an empty dataframe
         freq = list(freq_type_start.keys())[0]
         grid_cv_df = pd.DataFrame(columns=['order_param', 'seasonal_order_param',\
                                 'mape_total', 'mape_'+str(freq)])
 
-        # Using the grid search to perform the model build
+        # Using the grid, it builds a model for each unique combination 
+        # to search for the model which the best performance using AIC metric
         for param in pdq:
             for param_seasonal in seasonal_pdq:
-                cv_res = self.cross_validate(timeseries, param, param_seasonal, freq_type_start, freq_type_end)
+                cv_res = self.cross_validate(time_series, param, param_seasonal, freq_type_start, freq_type_end)
                 grid_cv_df = grid_cv_df.append(cv_res, ignore_index=True)
 
         return grid_cv_df
 
 
-    def model_build(self, timeseries_train, order_param, seasonal_order_param):
+    def model_build(self, time_series_train, order_param, seasonal_order_param):
         """
         Builds the model and returns summary statistics.
 
         Parameters
         ----------
-        timeseries_train : DataFrame
+        time_series_train : DataFrame
             A dataframe to be used for training the model where index is 
             a time based data type e.g datetime or period(M) and only has
             one feature which is the target feature.
@@ -369,26 +414,28 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             
         """
 
-        mod = sm.tsa.statespace.sarimax.SARIMAX(timeseries_train,
+        # Builds the SARIMA time series model
+        mod = sm.tsa.statespace.sarimax.SARIMAX(time_series_train,
                                 order = order_param,
                                 seasonal_order = seasonal_order_param,
                                 enforce_stationarity = False,
                                 enforce_invertibility = False)
+        # Trains the model
         results = mod.fit()
     
         return results        
 
 
-    def plot_actuals_vs_forecast(self, full_timeseries, order_param, seasonal_order_param, 
+    def plot_actuals_vs_forecast(self, full_time_series, order_param, seasonal_order_param, 
                     forecast_steps, y_lab, test_date, plot_date, datetime_col, significance_level=0.05):
         """
-        Splits the timeseries into train and test based on the test date. It
+        Splits the time series into train and test based on the test date. It
         then builds the model with the train data and predicts for a specified 
         number of steps returning the forecasted values. Then 
 
         Parameters
         ----------
-        full_timeseries : DataFrame
+        full_time_series : DataFrame
             A dataframe to be used for training and testing the model where 
             index is a time based data type e.g datetime or period(M) and 
             only has one feature which is the target feature.
@@ -438,15 +485,19 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             
         """ 
 
-        train_data = full_timeseries.loc[(full_timeseries.index < test_date)]
-        test_data = full_timeseries.loc[(full_timeseries.index >= test_date)]
-
+        # Splits the time series data based on the test_date
+        train_data = full_time_series.loc[(full_time_series.index < test_date)]
+        test_data = full_time_series.loc[(full_time_series.index >= test_date)]
+        
+        # Builds and trains the model
         res = self.model_build(train_data, order_param, seasonal_order_param)    
         
-        forecast_r = self.plot_forecasts(res, forecast_steps, full_timeseries, y_lab, \
+        # Plots the forecasted and actuals observation values
+        forecast_r = self.plot_forecasts(res, forecast_steps, full_time_series, y_lab, \
                             plot_date, significance_level)
         plt.show(forecast_r)
-
+        
+        # Gets the forecasted and actual values into one dataframe
         forecasted_values = res.get_forecast(steps=forecast_steps).predicted_mean.to_frame().reset_index()
         forecasted_values.columns = (datetime_col, 'Forecasted')
         test_data = test_data.reset_index()
@@ -456,28 +507,29 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return forecast_actuals
 
 
-    def result_evaluation(self, cr_result):
+    def model_diagnostics(self, model_result):
         """
-        Plots the diagnostics for each set of hyperparameters
+        Plots the model diagnostics
 
         Parameters
         ----------
-        cr_result : list
-            A list containing result of performing cross validation on each 
-            of the top 5 grid score searches. 
-            
-        """ 
-        # for x in cr_result:
-        #     print("Hyperparameters: Order{0}, Seasonal_Order{1}".format(x[0][0], x[0][1]))
-        #     r = x[1]
-        #     r.plot_diagnostics(figsize=(20, 8))
-        #     plt.show()
+        model_result : MLEResults
+            Class to hold results from fitting a state space model. The is the 
+            output from calling .fit() on the model. 
         
-        # print("")
+        Returns
+        -------
+        fig : plot
+            A plot of the diagnostics for the model
+
+        """ 
+        # Plots the model diagnostics
+        fig = model_result.plot_diagnostics(figsize=(20, 8))
+
+        return fig
 
 
-
-    def run_model_validation(self, grid_search_scores, timeseries_train, freq_type_start, freq_type_end):
+    def run_model_validation(self, grid_search_scores, time_series_train, freq_type_start, freq_type_end):
         """
         Runs the model build and cross validation functions for the top 5 aic scores
 
@@ -487,7 +539,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             A list containing a list of order_param, seasonal_order_param, 
             and results.aic which is the output of calling aic on model.fit().
 
-        timeseries_train : DataFrame
+        time_series_train : DataFrame
             A dataframe to be used for training the model where index is 
             a time based data type e.g datetime or period(M) and only has
             one feature which is the target feature.
@@ -512,14 +564,17 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             
         """ 
 
+        # Gets the top 5 parameters using the AIC metric
         hyperparams = self.top_aic_scores(grid_search_scores) 
 
+        # Gets the frequency and creates an empty dataframe
         freq = list(freq_type_start.keys())[0]
         run_model_df = pd.DataFrame(columns=['order_param', 'seasonal_order_param', 'mape_total', \
                                 'mape_'+str(freq)])
 
+        # Performs cross validation for each of the top 5 param 
         for order_x, seasonal_order_y, z in hyperparams:
-            cv_res = self.cross_validate(timeseries_train, order_x, seasonal_order_y, freq_type_start, freq_type_end)
+            cv_res = self.cross_validate(time_series_train, order_x, seasonal_order_y, freq_type_start, freq_type_end)
                     
             run_model_df = run_model_df.append(cv_res, ignore_index=True)
 
@@ -542,9 +597,12 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             Returns the top 5 AIC score from the scores_list.
 
         """
+        
+        # Function to the 3rd element
         def top_score(elem):
             return elem[2]
-    
+
+        # Sorts the list by the 3rd element
         scores_list.sort(key = top_score)
     
         return scores_list[0:5] 

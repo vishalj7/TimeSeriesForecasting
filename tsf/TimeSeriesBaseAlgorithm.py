@@ -16,7 +16,7 @@ class TimeSeriesBaseAlgorithm(ABC):
     should inherit from this class and those become a subclass of 
     TimeSeriesBaseAlgorithm. The subclass needs to implement the
     abstract methods. Where required the subclass can overwrite 
-    any of the concrete methods here. 
+    any of the concrete methods here.
 
     Notes
     -----
@@ -73,7 +73,7 @@ class TimeSeriesBaseAlgorithm(ABC):
         return train, test
         
     
-    def dickey_fuller_test(self, timeseries):
+    def dickey_fuller_test(self, time_series):
         """
         Runs the dickey-fuller test to determine whether the data is stationary or not. 
         Only if the p-value is less than 0.05 can you reject the null hypothesis. If it
@@ -81,7 +81,7 @@ class TimeSeriesBaseAlgorithm(ABC):
 
         Parameters
         ----------
-        timeseries : DataFrame
+        time_series : DataFrame
             A dataframe where the index is a time based data type 
             e.g datetime or period(M) and only has one feature which is the target feature
 
@@ -93,10 +93,10 @@ class TimeSeriesBaseAlgorithm(ABC):
             of observations and lags used
         """
         
-        timeseries = timeseries.iloc[:,0].values    
+        time_series = time_series.iloc[:,0].values    
 
         # Performs Dickey-Fuller test
-        df_test_res = adfuller(timeseries, autolag='AIC')
+        df_test_res = adfuller(time_series, autolag='AIC')
 
         # Creates Series and specifies the index
         df_res_output = pd.Series(df_test_res[0:4], index=['Test Statistic','p-value','#Lags Used','Number of Observations Used'])
@@ -108,13 +108,13 @@ class TimeSeriesBaseAlgorithm(ABC):
         return df_res_output
 
 
-    def display_rolling_plot(self, timeseries, rolling_period):
+    def display_rolling_plot(self, time_series, rolling_period):
         """
         Generates and display a line plot with 3 line, the original data points, the rolling mean and the rolling standard deviation. 
 
         Parameters
         ----------
-        timeseries : DataFrame
+        time_series : DataFrame
             A dataframe where the index is a time based data type 
             e.g datetime or period(M) and only has one feature which is the target feature
         
@@ -130,15 +130,15 @@ class TimeSeriesBaseAlgorithm(ABC):
 
         print("Displaying rolling plot...")
         # Selects only the value data points and creates an empty plot
-        timeseries = timeseries.iloc[:,0].values             
+        time_series = time_series.iloc[:,0].values             
         fig, ax = plt.subplots(figsize=(20, 10))
 
         # Calculates the rolling statistics for both the mean and standard deviation
-        rolmean = pd.Series(timeseries).rolling(rolling_period).mean()
-        rolstd = pd.Series(timeseries).rolling(rolling_period).std()
+        rolmean = pd.Series(time_series).rolling(rolling_period).mean()
+        rolstd = pd.Series(time_series).rolling(rolling_period).std()
 
         # Plots rolling statistics
-        orig = plt.plot(timeseries, color='blue',label='Original')
+        orig = plt.plot(time_series, color='blue',label='Original')
         mean = plt.plot(rolmean, color='red', label='Rolling Mean')
         std = plt.plot(rolstd, color='black', label = 'Rolling Std')
         plt.legend(loc='best')
