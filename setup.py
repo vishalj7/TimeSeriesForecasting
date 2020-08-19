@@ -6,7 +6,6 @@ setup(
     author='V. JHAVERI',
     author_email='vishal.jhaveri@capgemini.com',
     packages=['tsf', 'tsf/test'],
-    scripts=['TSF_Model_Demo1-Monthly.ipynb', 'TSF_Model_Demo2-Daily.ipynb'],
     license='LICENSE.txt',
     data_files=[('data', ['data/daily_temp.csv', 'data/car_sales_by_month.csv'])],
     description='A package that helps to perform time series analysis and forecasting',
