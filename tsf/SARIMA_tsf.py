@@ -197,129 +197,6 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return decomposition, fig
 
 
-    def plot_forecasts(self, results, forecast_steps, full_time_series, 
-                                y_lab, date, significance_level=0.05):
-        """
-        Using the forecasted values and the actual values generates a plot 
-        to visulise the Forecasted vs Actuals.
-  
-        Parameters
-        ----------
-        results : MLEResults
-            Class to hold results from fitting a state space model. The is the 
-            output from calling .fit() on the model.
-            
-        forecast_steps : str
-            The number of observations to forecast for.
-
-        full_time_series : DataFrame
-            A dataframe where index is a time based data type e.g datetime or 
-            period(M) and only has one feature which is the target feature. This
-            should contain all the observations. 
-
-        y_lab : str
-            Name of the y-axis 
-        
-        date : str
-            A date to start the plotting from. This doesn't have to be from the 
-            start of the time series but it should be before the start point for
-            the forecast. This should be in the same format as the datetime 
-            column.
-
-        significance_level : float
-            This significance level is used for the confidence interval. ie., 
-            default value = 0.05 returns a 95% confidence interval. Confidence 
-            interval shows the area where the actual value could be between, 
-            the smaller the significance level, the larger the confidence interval 
-            which returns a larger area. 
-
-        Returns
-        -------
-        m_pred.get_figure() : plot
-            A plot which shows the actual values, the forecasted values and the
-            confidence interval for the forecasted values.
-
-        """
-
-        # Gets a set of forecasts and the associated confidence intervals
-        pred_forecast = results.get_forecast(steps=forecast_steps)
-        pred_ci = pred_forecast.conf_int(alpha=significance_level)
-        
-        # Selects the desired obervations to plot
-        plot_data = full_time_series.loc[(full_time_series.index >= date)]
-
-        # Plots the actual and forecasted values
-        ax = plot_data.plot(label='Actuals', figsize=(20, 10))
-        m_pred = pred_forecast.predicted_mean.plot(ax=ax, label='Forecast')
-
-        # Adds the confidence intervals and shades them grey
-        ax.fill_between(pred_ci.index,
-                        pred_ci.iloc[:, 0],
-                        pred_ci.iloc[:, 1], color='k', alpha=.25)
-        ax.set_xlabel('Date')
-        ax.set_ylabel(y_lab)
-        plt.title(("Forecasted Values using {0}% confidence interval").format(str(int(100-(significance_level*100)))))
-        plt.legend()
-        
-        return m_pred.get_figure()
-
-
-    def grid_search_run(self, time_series_train, order_range, seasonal_order_list):
-        """
-        Generates a grid search of parameters and then builds a 
-        model with every combination of parameters. It then saves
-        the AIC score and parameters into a list.
-
-        Parameters
-        ----------
-        time_series_train : DataFrame
-            A dataframe to be used for training the model where index is 
-            a time based data type e.g datetime or period(M) and only has
-            one feature which is the target feature.
-            
-        order_range : range
-            A range of values to assign for p, d and q. This represents the
-            number of AR parameters (p), differences (d), and MA (q) parameters.
-
-        seasonal_order_list : list
-            A list of values to assign for M. This represents a single 
-            seasonality period (M). Note it will use order_range for the
-            values for the number of AR parameters (P), differences (D)
-            and MA (Q) parameter.
-
-        Returns
-        -------
-        aic_scores : c
-            A list of the order parameters, seasonal parameters and the respective AIC score
-            
-        """   
-
-        # Creates a combination of all the different values for order param
-        # and seasonal order param (the grid)
-        aic_scores = []
-        p = d = q = order_range
-        M = seasonal_order_list
-        pdq = list(itertools.product(p, d, q))
-        seasonal_pdq = [(x[0], x[1], x[2], x[3]) for x in list(itertools.product(p, d, q, M))]
-        
-        # Using the grid, it builds a model for each unique combination 
-        # to search for the model which the best performance using AIC metric
-        for param in pdq:
-            for param_seasonal in seasonal_pdq:
-                try:
-                    results = self.model_build(time_series_train, param, param_seasonal)
-
-                    aic = [param, param_seasonal, results.aic] 
-                    aic_scores.append(aic)
-                    
-                # Captures any errors
-                except Exception as e:
-                    print('Error: '+ str(e))
-                    continue
-                    
-        return aic_scores
-
-
     def grid_search_CV(self, time_series, order_range, seasonal_order_list,
                                 freq_type_start, freq_type_end):
         """
@@ -385,6 +262,62 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return grid_cv_df
 
 
+    def grid_search_run(self, time_series_train, order_range, seasonal_order_list):
+        """
+        Generates a grid search of parameters and then builds a 
+        model with every combination of parameters. It then saves
+        the AIC score and parameters into a list.
+
+        Parameters
+        ----------
+        time_series_train : DataFrame
+            A dataframe to be used for training the model where index is 
+            a time based data type e.g datetime or period(M) and only has
+            one feature which is the target feature.
+            
+        order_range : range
+            A range of values to assign for p, d and q. This represents the
+            number of AR parameters (p), differences (d), and MA (q) parameters.
+
+        seasonal_order_list : list
+            A list of values to assign for M. This represents a single 
+            seasonality period (M). Note it will use order_range for the
+            values for the number of AR parameters (P), differences (D)
+            and MA (Q) parameter.
+
+        Returns
+        -------
+        aic_scores : list
+            A list of the order parameters, seasonal parameters and the respective AIC score
+            
+        """   
+
+        # Creates a combination of all the different values for order param
+        # and seasonal order param (the grid)
+        aic_scores = []
+        p = d = q = order_range
+        M = seasonal_order_list
+        pdq = list(itertools.product(p, d, q))
+        seasonal_pdq = [(x[0], x[1], x[2], x[3]) for x in list(itertools.product(p, d, q, M))]
+        
+        # Using the grid, it builds a model for each unique combination 
+        # to search for the model which the best performance using AIC metric
+        for param in pdq:
+            for param_seasonal in seasonal_pdq:
+                try:
+                    results = self.model_build(time_series_train, param, param_seasonal)
+
+                    aic = [param, param_seasonal, results.aic] 
+                    aic_scores.append(aic)
+                    
+                # Captures any errors
+                except Exception as e:
+                    print('Error: '+ str(e))
+                    continue
+                    
+        return aic_scores
+
+
     def model_build(self, time_series_train, order_param, seasonal_order_param):
         """
         Builds the model and returns summary statistics.
@@ -426,6 +359,28 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return results        
 
 
+    def model_diagnostics(self, model_result):
+        """
+        Plots the model diagnostics
+
+        Parameters
+        ----------
+        model_result : MLEResults
+            Class to hold results from fitting a state space model. The is the 
+            output from calling .fit() on the model. 
+        
+        Returns
+        -------
+        fig : plot
+            A plot of the diagnostics for the model
+
+        """ 
+        # Plots the model diagnostics
+        fig = model_result.plot_diagnostics(figsize=(20, 8))
+
+        return fig
+        
+        
     def plot_actuals_vs_forecast(self, full_time_series, order_param, seasonal_order_param, 
                     forecast_steps, y_lab, test_date, plot_date, datetime_col, significance_level=0.05):
         """
@@ -450,7 +405,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             Number of AR parameters (P), differences (D), MA (Q) parameter and
             single seasonality period (M).
    
-        forecast_steps : str
+        forecast_steps : int
             The number of observations to forecast for.
 
         y_lab : str
@@ -470,7 +425,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         datetime_col : str
             Name of the date time column e.g. Date, Year-Month.
 
-        significance_level : float
+        significance_level : float, optional
             This significance level is used for the confidence interval. ie., 
             default value = 0.05 returns a 95% confidence interval. Confidence 
             interval shows the area where the actual value could be between, 
@@ -507,28 +462,73 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         return forecast_actuals
 
 
-    def model_diagnostics(self, model_result):
+    def plot_forecasts(self, results, forecast_steps, full_time_series, 
+                                y_lab, date, significance_level=0.05):
         """
-        Plots the model diagnostics
-
+        Using the forecasted values and the actual values generates a plot 
+        to visulise the Forecasted vs Actuals.
+  
         Parameters
         ----------
-        model_result : MLEResults
+        results : MLEResults
             Class to hold results from fitting a state space model. The is the 
-            output from calling .fit() on the model. 
+            output from calling .fit() on the model.
+            
+        forecast_steps : int
+            The number of observations to forecast for.
+
+        full_time_series : DataFrame
+            A dataframe where index is a time based data type e.g datetime or 
+            period(M) and only has one feature which is the target feature. This
+            should contain all the observations. 
+
+        y_lab : str
+            Name of the y-axis 
         
+        date : str
+            A date to start the plotting from. This doesn't have to be from the 
+            start of the time series but it should be before the start point for
+            the forecast. This should be in the same format as the datetime 
+            column.
+
+        significance_level : float, optional
+            This significance level is used for the confidence interval. ie., 
+            default value = 0.05 returns a 95% confidence interval. Confidence 
+            interval shows the area where the actual value could be between, 
+            the smaller the significance level, the larger the confidence interval 
+            which returns a larger area. 
+
         Returns
         -------
-        fig : plot
-            A plot of the diagnostics for the model
+        m_pred.get_figure() : plot
+            A plot which shows the actual values, the forecasted values and the
+            confidence interval for the forecasted values.
 
-        """ 
-        # Plots the model diagnostics
-        fig = model_result.plot_diagnostics(figsize=(20, 8))
+        """
 
-        return fig
+        # Gets a set of forecasts and the associated confidence intervals
+        pred_forecast = results.get_forecast(steps=forecast_steps)
+        pred_ci = pred_forecast.conf_int(alpha=significance_level)
+        
+        # Selects the desired obervations to plot
+        plot_data = full_time_series.loc[(full_time_series.index >= date)]
 
+        # Plots the actual and forecasted values
+        ax = plot_data.plot(label='Actuals', figsize=(20, 10))
+        m_pred = pred_forecast.predicted_mean.plot(ax=ax, label='Forecast')
 
+        # Adds the confidence intervals and shades them grey
+        ax.fill_between(pred_ci.index,
+                        pred_ci.iloc[:, 0],
+                        pred_ci.iloc[:, 1], color='k', alpha=.25)
+        ax.set_xlabel('Date')
+        ax.set_ylabel(y_lab)
+        plt.title(("Forecasted Values using {0}% confidence interval").format(str(int(100-(significance_level*100)))))
+        plt.legend()
+        
+        return m_pred.get_figure()
+        
+        
     def run_model_validation(self, grid_search_scores, time_series_train, freq_type_start, freq_type_end):
         """
         Runs the model build and cross validation functions for the top 5 aic scores
