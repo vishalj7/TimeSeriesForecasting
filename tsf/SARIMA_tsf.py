@@ -79,6 +79,12 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             'mape_total', 'mape_freq'. The word 'freq' is replaced with the actual
             frequency of the data.
 
+        mape_df : DataFrame
+            A dataframe containing the results of the cross validation. 
+            There are 6 columns 'order_param', 'seasonal_order_param', cv_datestart', 
+            'cv_dateend', 'mape_total', 'mape_freq'. The word 'freq' is replaced 
+            with the actual frequency of the data.
+
         """
 
         # Extracts the validation_period, no_forecasts and frequency from the input 
@@ -121,16 +127,20 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
             mape_freq = super().mean_absolute_percentage_error(actual,pred)
 
             # Adds the values to a list
-            mape_res = [cv_datestart, cv_dateend, mape_total, mape_freq]
+            mape_res = [order_param, seasonal_order_param, cv_datestart, cv_dateend, mape_total, mape_freq]
             mape.append(mape_res)
+
+        # Creates an empty dataframe
+        mape_df = pd.DataFrame(mape, columns=['order_param', 'seasonal_order_param', 'cv_datestart', \
+                'cv_dateend', 'mape_total', 'mape_'+str(freq)])
 
         # Creates an empty dataframe
         cv_mape_res = pd.DataFrame(columns=['order_param', \
                                 'seasonal_order_param', 'mape_total', 'mape_'+str(freq)])
         
         # Calculates the MAPE total and MAPE freq for the entire validation period
-        lst_tot_mape = str(round(np.mean([item[2] for item in mape]),2))
-        lst_freq_mape = str(round(np.mean([item[3] for item in mape]),2))
+        lst_tot_mape = str(round(np.mean([item[4] for item in mape]),2))
+        lst_freq_mape = str(round(np.mean([item[5] for item in mape]),2))
 
         # Creates a series and adds the data as a row to the 'cv_mape_res' dataframe
         mape_row = pd.Series(data=[order_param, seasonal_order_param, lst_tot_mape, lst_freq_mape], \
@@ -138,7 +148,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         cv_mape_res = cv_mape_res.append(mape_row, ignore_index=True)
 
-        return cv_mape_res
+        return cv_mape_res, mape_df
 
     
     def decompose(self, time_series, model_type):
