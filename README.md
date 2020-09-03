@@ -2,7 +2,6 @@
 
 TimeSeriesForecasting is a Python library for performing time series analysis and 
 forecasting future values.
-<br/><br/>
 
 ## Dependencies
 TimeSeriesForecasting requires:
@@ -12,7 +11,6 @@ TimeSeriesForecasting requires:
 + NumPy (>= 1.18.1)
 + MatplotLib
 + Statsmodels (>= 0.11.0)
-<br/><br/>
 
 ## Installation
 
@@ -25,7 +23,6 @@ cd Downloads/TimeSeriesForecasting
 
 pip install .
 ```
-<br/><br/>
 
 ## Usage
 
@@ -38,7 +35,10 @@ tsf = SARIMA_tsf()
 
 tsf.dickey_fuller_test(time_series_data) # returns the result of the dickey fuller test
 ```
-<br/><br/>
+
+## Data Format
+
+This package requires the data in a dataframe where the index is a datetime format and the frequency of the data has been set using '.asfreq()' and the column/s to be in a numeric format whether that be as an integer or floating point
 
 ## Sample Scripts
 
@@ -50,19 +50,16 @@ There are samples scripts in the sample_scripts folder which provides examples o
 + builds the model with the optimal hyperparameters
 + performs forecasting of future observations
 + performs model diagnostic
-<br/><br/>
 
 These scripts can then be used as a template and there are 2 versions. One where the datetime frequency is montly and another script where the frequency is daily. 
 
 ### Note 
 If you would like to run these scripts please make sure the data folder and the files inside is kept in the same directory as the sample_scritps folder. 
 
-<br/><br/>
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 Please make sure to update tests as appropriate.
-<br/><br/>
 
 ## License
 [GNU](https://choosealicense.com/licenses/gpl-3.0/) General Public License v3.0 or later
