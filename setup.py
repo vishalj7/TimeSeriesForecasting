@@ -11,7 +11,7 @@ setup(
     license='LICENSE.txt',
     data_files=[('data', ['data/daily_temp.csv', 'data/car_sales_by_month.csv'])],
     description='A package that helps to perform time series analysis and forecasting',
-    long_description=open('README.txt').read(),
+    long_description=open('README.md').read(),
     python_requires='>=3.5, <4',
     install_requires=[
         "pandas >= 1.0.1",
