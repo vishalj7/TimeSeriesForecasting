@@ -38,7 +38,12 @@ tsf.dickey_fuller_test(time_series_data) # returns the result of the dickey full
 
 ## Data Format
 
-This package requires the data in a dataframe where the index is a datetime format and the frequency of the data has been set using '.asfreq()' and the column/s to be in a numeric format whether that be as an integer or floating point
+Below are the requirements of the data for this packge:
+
++ The data should be in a dataframe where the index is a datetime format and the frequency of the data has been set using '.asfreq()'.
++ The data should be sorted by the index in ascending order.
++ The columns of the data should be in a numeric format as either an integer or floating point.
++ There should be no missing data points and if there are any these should be replace with appropriate values.
 
 ## Sample Scripts
 
