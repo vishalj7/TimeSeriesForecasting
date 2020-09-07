@@ -1,7 +1,6 @@
 ## SARIMA
 
 This document covers what SARIMA is and when it should be used. To see how to run this algorithm, please view the scripts in the sample_script folder, the scripts will provide a guide on how to run this algorithm for 2 different datetime formats daily and monthly.
-<br></br>
 
 ### What is SARIMA?
 
@@ -10,8 +9,6 @@ SARIMA or Seasonal Autoregressive Integrated Moving Average is a univariate time
 SARIMA can handle time series data that contains a seasonal pattern as the algorithm can perform differencing on the data to essentially remove the effect of the seasonal pattern. 
 
 
-
-<br></br>
 ### When should SARIMA be used?
 
 When you want to use a single data column to make predicitons (univariate), it doesn't matter if the data has more than one column but before using the SARIMA algorithm, you need to make sure there is only a single data column and the index is in a datetime format. 
