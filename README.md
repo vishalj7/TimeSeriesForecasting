@@ -16,10 +16,10 @@ TimeSeriesForecasting requires:
 
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install TimeSeriesForecasting.
 
-First, download the package via github and then extract the folder. Next step would be to change directory to the extracted folder and run the following command. 
+First, download the package via github as a zip and then unzip the folder. The next step would be to change to the directory (via command line) where the extracted folder is and run the following command. 
 
 ```bash
-cd Downloads/TimeSeriesForecasting
+cd Downloads/TimeSeriesForecasting-master
 
 pip install .
 ```
