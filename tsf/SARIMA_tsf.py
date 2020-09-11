@@ -266,7 +266,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
         # to search for the model which the best performance using AIC metric
         for param in pdq:
             for param_seasonal in seasonal_pdq:
-                cv_res = self.cross_validate(time_series, param, param_seasonal, freq_type_start, freq_type_end)
+                cv_res, mape_df = self.cross_validate(time_series, param, param_seasonal, freq_type_start, freq_type_end)
                 grid_cv_df = grid_cv_df.append(cv_res, ignore_index=True)
 
         return grid_cv_df
@@ -584,7 +584,7 @@ class SARIMA_tsf(TimeSeriesBaseAlgorithm):
 
         # Performs cross validation for each of the top 5 param 
         for order_x, seasonal_order_y, z in hyperparams:
-            cv_res = self.cross_validate(time_series_train, order_x, seasonal_order_y, freq_type_start, freq_type_end)
+            cv_res, mape_df = self.cross_validate(time_series_train, order_x, seasonal_order_y, freq_type_start, freq_type_end)
                     
             run_model_df = run_model_df.append(cv_res, ignore_index=True)
 
